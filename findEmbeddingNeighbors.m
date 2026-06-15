@@ -1,0 +1,52 @@
+function [neighborDistances, neighborTimeIndices] = findEmbeddingNeighbors(m, queryTimeIndex, timeIndices, e)
+% findEmbeddingNeighbors
+%
+% Finds the e + 1 nearest neighbors of one delay vector.
+%
+% Inputs:
+%   m        = delay embedding matrix
+%              each row is one delay vector
+%
+%   queryRow = row of m that we want to find neighbors for
+%
+%   e        = embedding dimension
+%              function will use k = e + 1 neighbors
+%
+% Outputs:
+%   neighborRows      = row numbers of nearest neighbors
+%   neighborDistances = distances to nearest neighbors
+
+    
+    k = e + 1;
+    queryRowNumber = find(timeIndices == queryTimeIndex);
+    queryRow = m(queryRowNumber, :);
+
+    allDistances = Nan(size(m,1), 1);
+
+    for i = 1:1:size(m, 1)
+        
+            difference = queryRow - m(i, :);
+
+            distance = sqrt(sum(difference.^2));
+            
+            allDistances(i) = distance;
+
+    end
+
+    allDistances(queryRowNumber) = Inf;
+
+    neighborDistances = NaN(k,1);
+    neighborTimeIndices = NaN(k,1);
+
+    for i = 1:1:k
+
+        [smallestDistance, index] = min(allDistances);
+        neighborDistances(i) = smallestDistance;
+        neighborTimeIndices(i) = timeIndices(index);
+        allDistances(index) = Inf;
+
+    end
+
+    
+
+end
