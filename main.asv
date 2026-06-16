@@ -65,16 +65,10 @@ validY = ~isnan(y_estimate);
 rho_x_xmap_y = corr(y(validY), y_estimate(validY))
 
 
-libSize = 100;
 
-uBound = n - libSize;
-lBound = 1
-randStart = lBound + (uBound-lBound)*rand();
-
-
-
-
-
+uBound
+lBound
+randStart = lBound + (uBound-lBound)*rand()
 
 
 
