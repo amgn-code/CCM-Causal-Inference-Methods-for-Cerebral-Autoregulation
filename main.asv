@@ -7,14 +7,14 @@ fs = 4;
 t = (0:1/fs:300)';
 
 x = sin(2*pi*0.05*t) + 0.5*sin(2*pi*0.13*t);
-y = 0.8*x + 0.2*sin(2*pi*0.02*t);
-%{
+%y = 0.8*x + 0.2*sin(2*pi*0.02*t);
+
 y = zeros(size(x));
 
 for i = 2:length(x)
     y(i) = 0.8*y(i-1) + 0.4*x(i-1);
 end
-%}
+
 
 n  = length(x);
 
@@ -84,46 +84,64 @@ for l = 1:length(EmbeddingSizes)
         ccmEstimateMatrix(:, 2*m + 1) = x_estimate;
         ccmEstimateMatrix(:, 2*m + 2) = y_estimate;
 
+        validX = ~isnan(x_estimate);
+        R_x = corrcoef(x(validX), x_estimate(validX));
+        xCorrelations(m) = R_x(1,2);
+
+        validY = ~isnan(y_estimate);
+        R_y = corrcoef(y(validY), y_estimate(validY));
+        yCorrelations(m) = R_y(1,2);
+
         x_estimate = NaN(n,1);
         y_estimate = NaN(n,1);
+      
 
     end
-    
-    matrixName = sprintf('LibSize_%d', EmbeddingSizes(l));
-    ccmEstimateData.(matrixName) = ccmEstimateMatrix;
+   
 
+    xEstimateColumns = 3:2:(2 + 2*numTrials);
+    yEstimateColumns = 4:2:(2 + 2*numTrials);
+    averageXEstimate = mean(ccmMatrix(:, xEstimateColumns), 2, 'omitnan');
+    averageYEstimate = mean(ccmMatrix(:, yEstimateColumns), 2, 'omitnan');
+
+    matrixName = sprintf('LibSize_%d', EmbeddingSizes(l));
+    
+    ccmEstimateData.(matrixName).data = ccmEstimateMatrix;
+    ccmEstimateData.(matrixName).means = [averageXEstimate, averageYEstimate];
+
+
+    ccmCorrData.(matrixName).correlations = [xCorrelations; yCorrelations];
+
+    ccmCorrData.(matrixName).meanCorrelations = mean( ...
+        ccmCorrData.(matrixName).correlations, 2, 'omitnan');
+    
 end
  
 
+%%
 
-%% Test Full-Library Self Reconstruction
+meanXByL = NaN(length(EmbeddingSizes), 1);
+meanYByL = NaN(length(EmbeddingSizes), 1);
 
-libStart = firstEmbeddingIndex;
-libEnd = n;
+for l = 1:length(EmbeddingSizes)
 
-x_selfEstimate = NaN(n,1);
-y_selfEstimate = NaN(n,1);
+    matrixName = sprintf('LibSize_%d', EmbeddingSizes(l));
 
-for i = firstEmbeddingIndex:n
-
-    % Find neighbors of x embedding point using full Mx library
-    [neighborDistances_x, neighborIndices_x] = ...
-        findEmbeddingNeighbors(e, tau, Mx, i, libStart, libEnd);
-
-    % Find neighbors of y embedding point using full My library
-    [neighborDistances_y, neighborIndices_y] = ...
-        findEmbeddingNeighbors(e, tau, My, i, libStart, libEnd);
-
-    % Since Mx/My rows now match x/y indices, no conversion needed
-    x_selfEstimate(i) = findEstimate(neighborDistances_x, neighborIndices_x, x);
-    y_selfEstimate(i) = findEstimate(neighborDistances_y, neighborIndices_y, y);
+    meanXByL(l) = ccmCorrData.(matrixName).meanCorrelations(1);
+    meanYByL(l) = ccmCorrData.(matrixName).meanCorrelations(2);
 
 end
 
-validX = ~isnan(x_selfEstimate);
-R_x = corrcoef(x(validX), x_selfEstimate(validX));
-rho_x_self = R_x(1,2)
+%%
 
-validY = ~isnan(y_selfEstimate);
-R_y = corrcoef(y(validY), y_selfEstimate(validY));
-rho_y_self = R_y(1,2)
+figure()
+plot(EmbeddingSizes, meanXByL, '-o')
+hold on
+plot(EmbeddingSizes, meanYByL, '-o')
+hold off
+
+xlabel('Library Size L')
+ylabel('Cross-map skill \rho')
+legend('M_y estimates x', 'M_x estimates y', 'Location', 'best')
+title('CCM Convergence')
+grid on
