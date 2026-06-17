@@ -12,11 +12,9 @@ function [neighborDistances, neighborRowIndices] = findEmbeddingNeighbors(e, tau
     for i = libStart:libEnd
         if (i < embeddingTargetIndex - theilerExclusionWindow || ...
                 i > embeddingTargetIndex + theilerExclusionWindow)
-            
             difference = embeddingTargetVector - M(i, :);
             distance = sqrt(sum(difference.^2));
             [maxDistance, maxIndex] = max(neighborDistances);
-            
             if distance < maxDistance
                 if distance == 0
                     neighborDistances(maxIndex) = eps;

@@ -7,87 +7,123 @@ fs = 4;
 t = (0:1/fs:300)';
 
 x = sin(2*pi*0.05*t) + 0.5*sin(2*pi*0.13*t);
+y = 0.8*x + 0.2*sin(2*pi*0.02*t);
+%{
 y = zeros(size(x));
 
 for i = 2:length(x)
     y(i) = 0.8*y(i-1) + 0.4*x(i-1);
 end
+%}
 
+n  = length(x);
+
+
+%% User Editable Parameters
 e = 3;
 tau = 4;  
 
-n  = length(x);
-firstIndex = 1 +(e-1) * tau;
+% Dependent Parameter
+firstEmbeddingIndex = 1 +(e-1) * tau;
 
-timeIndices = (firstIndex:n);
+%% Find Embeddings
 
-mx = zeros(length(timeIndices), e);
-my = zeros(length(timeIndices), e);
+Mx = findEmbedding(x, firstEmbeddingIndex, tau, e);
+My = findEmbedding(y, firstEmbeddingIndex, tau, e);
 
-for i = 1:1:size(mx,1)
-
-    timeIndex = i + firstIndex - 1;
-
-    for j = 1:1:size(mx,2)
-
-        mx(i, j) = x(timeIndex - (j-1)*tau);
-        my(i, j) = y(timeIndex - (j-1)*tau);
-    
-    end
-
-end
-
-
-%% Find Embedding Neighbors
-
-x_estimate = NaN(length(x), 1);
-y_estimate =  NaN(length(y), 1);
-
-for i = firstIndex:n
-
-    [x_neighborDistances, x_neighborRowIndices] = findEmbeddingNeighbors(e, tau, mx, i, firstIndex);
-    [y_neighborDistances, y_neighborRowIndices] = findEmbeddingNeighbors(e, tau, my, i, firstIndex);
-    
-    x_neighborTimeIndices = timeToIndex(x_neighborRowIndices, firstIndex, false);
-    y_neighborTimeIndices = timeToIndex(y_neighborRowIndices, firstIndex, false);
-    
-    x_estimate(i) = findEstimate(y_neighborDistances, y_neighborTimeIndices, x);
-    y_estimate(i) = findEstimate(x_neighborDistances, x_neighborTimeIndices, y);
-
-end
-
-
-
-validX = ~isnan(x_estimate);
-rho_y_xmap_x = corr(x(validX), x_estimate(validX))
-
-validY = ~isnan(y_estimate);
-rho_x_xmap_y = corr(y(validY), y_estimate(validY))
-
-
-
-uBound
-lBound
-randStart = lBound + (uBound-lBound)*rand()
-
-
-
-
-
-
-
-
-
-%[mx, timeIndices] = buildDelayEmbedding(x, e, tau);
-
-%% Plot Embedding
+%% Plot Embedding Manifolds
 
 figure()
-plot3(mx(:,1), mx(:,2), mx(:,3), '.')
+plot3(Mx(:,1), Mx(:,2), Mx(:,3), '.')
 xlabel('x(t)')
 ylabel('x(t - tau)')
 zlabel('x(t - 2tau)')
 title('Delay Embedding of x')
 grid on
 
+%% User editable experimental parameters
 
+maxEmbeddingSize = n - firstEmbeddingIndex + 1;
+EmbeddingSizes = [50 75 100 150 200 300 450 600 800 1000 maxEmbeddingSize];
+numTrials = 3;
+
+%%
+
+ccmEstimateData = struct();
+ccmEstimateMatrix = NaN(n, 2+ numTrials*2);
+
+ccmCorrData = struct();
+
+x_estimate = NaN(n,1);
+y_estimate = NaN(n,1);
+
+
+for l = 1:length(EmbeddingSizes)
+
+    ccmEstimateMatrix = [x, y];
+
+    xCorrelations = NaN(1, numTrials);
+    yCorrelations = NaN(1, numTrials);
+
+    for m = 1:numTrials
+        
+        L = EmbeddingSizes(l); 
+        
+        libStart = randi([firstEmbeddingIndex, n - L + 1]);
+        libEnd = libStart + L - 1;
+
+        for i = firstEmbeddingIndex:n
+            [neighborDistances_x, neighborIndices_x] = findEmbeddingNeighbors(e, tau, Mx, i, libStart, libEnd);
+            [neighborDistances_y, neighborIndices_y] = findEmbeddingNeighbors(e, tau, My, i, libStart, libEnd);
+
+            x_estimate(i) = findEstimate(neighborDistances_y, neighborIndices_y, x);
+            y_estimate(i) = findEstimate(neighborDistances_x, neighborIndices_x, y);
+
+        end
+
+        ccmEstimateMatrix(:, 2*m + 1) = x_estimate;
+        ccmEstimateMatrix(:, 2*m + 2) = y_estimate;
+
+        x_estimate = NaN(n,1);
+        y_estimate = NaN(n,1);
+
+    end
+    
+    matrixName = sprintf('LibSize_%d', EmbeddingSizes(l));
+    ccmEstimateData.(matrixName) = ccmEstimateMatrix;
+
+end
+ 
+
+
+%% Test Full-Library Self Reconstruction
+
+libStart = firstEmbeddingIndex;
+libEnd = n;
+
+x_selfEstimate = NaN(n,1);
+y_selfEstimate = NaN(n,1);
+
+for i = firstEmbeddingIndex:n
+
+    % Find neighbors of x embedding point using full Mx library
+    [neighborDistances_x, neighborIndices_x] = ...
+        findEmbeddingNeighbors(e, tau, Mx, i, libStart, libEnd);
+
+    % Find neighbors of y embedding point using full My library
+    [neighborDistances_y, neighborIndices_y] = ...
+        findEmbeddingNeighbors(e, tau, My, i, libStart, libEnd);
+
+    % Since Mx/My rows now match x/y indices, no conversion needed
+    x_selfEstimate(i) = findEstimate(neighborDistances_x, neighborIndices_x, x);
+    y_selfEstimate(i) = findEstimate(neighborDistances_y, neighborIndices_y, y);
+
+end
+
+validX = ~isnan(x_selfEstimate);
+R_x = corrcoef(x(validX), x_selfEstimate(validX));
+rho_x_self = R_x(1,2)
+
+validY = ~isnan(y_selfEstimate);
+R_y = corrcoef(y(validY), y_selfEstimate(validY));
+rho_y_self = R_y(1,2)
